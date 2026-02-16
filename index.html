@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#ffffff">
+  <title>Stammbaum</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/svg+xml" href="assets/icons/favicon.svg">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- LOADING SCREEN                          -->
+  <!-- ═══════════════════════════════════════ -->
+  <div id="loading-screen" class="view active">
+    <div class="loading-circuit">
+      <svg width="80" height="80" viewBox="0 0 80 80">
+        <rect x="20" y="20" width="40" height="40" rx="4" fill="none" stroke="#1a1a1a" stroke-width="2"/>
+        <line x1="40" y1="0" x2="40" y2="20" stroke="#1a1a1a" stroke-width="2"/>
+        <line x1="40" y1="60" x2="40" y2="80" stroke="#1a1a1a" stroke-width="2"/>
+        <line x1="0" y1="40" x2="20" y2="40" stroke="#1a1a1a" stroke-width="2"/>
+        <line x1="60" y1="40" x2="80" y2="40" stroke="#1a1a1a" stroke-width="2"/>
+        <circle cx="40" cy="40" r="6" fill="#e63946" class="pulse-dot"/>
+      </svg>
+      <p class="loading-text">Stammbaum wird geladen...</p>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- AUTH VIEW                                -->
+  <!-- ═══════════════════════════════════════ -->
+  <div id="view-auth" class="view">
+    <div class="auth-container">
+      <div class="auth-logo">
+        <svg width="120" height="120" viewBox="0 0 120 120">
+          <!-- Central IC chip -->
+          <rect x="35" y="35" width="50" height="50" rx="4" fill="none" stroke="#1a1a1a" stroke-width="2"/>
+          <!-- Pins top -->
+          <line x1="48" y1="20" x2="48" y2="35" stroke="#1a1a1a" stroke-width="2"/>
+          <line x1="60" y1="15" x2="60" y2="35" stroke="#1a1a1a" stroke-width="2"/>
+          <line x1="72" y1="20" x2="72" y2="35" stroke="#1a1a1a" stroke-width="2"/>
+          <!-- Pins bottom -->
+          <line x1="48" y1="85" x2="48" y2="100" stroke="#1a1a1a" stroke-width="2"/>
+          <line x1="60" y1="85" x2="60" y2="105" stroke="#1a1a1a" stroke-width="2"/>
+          <line x1="72" y1="85" x2="72" y2="100" stroke="#1a1a1a" stroke-width="2"/>
+          <!-- Pins left -->
+          <line x1="20" y1="48" x2="35" y2="48" stroke="#1a1a1a" stroke-width="2"/>
+          <line x1="15" y1="60" x2="35" y2="60" stroke="#1a1a1a" stroke-width="2"/>
+          <line x1="20" y1="72" x2="35" y2="72" stroke="#1a1a1a" stroke-width="2"/>
+          <!-- Pins right -->
+          <line x1="85" y1="48" x2="100" y2="48" stroke="#1a1a1a" stroke-width="2"/>
+          <line x1="85" y1="60" x2="105" y2="60" stroke="#1a1a1a" stroke-width="2"/>
+          <line x1="85" y1="72" x2="100" y2="72" stroke="#1a1a1a" stroke-width="2"/>
+          <!-- Nodes at ends -->
+          <circle cx="48" cy="20" r="3" fill="#e63946"/>
+          <circle cx="72" cy="20" r="3" fill="#1a1a1a"/>
+          <circle cx="48" cy="100" r="3" fill="#1a1a1a"/>
+          <circle cx="72" cy="100" r="3" fill="#e63946"/>
+          <circle cx="20" cy="48" r="3" fill="#1a1a1a"/>
+          <circle cx="20" cy="72" r="3" fill="#e63946"/>
+          <circle cx="100" cy="48" r="3" fill="#e63946"/>
+          <circle cx="100" cy="72" r="3" fill="#1a1a1a"/>
+          <!-- Center text -->
+          <text x="60" y="64" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" font-weight="600" fill="#1a1a1a">STB</text>
+        </svg>
+      </div>
+      <h1 class="auth-title">Stammbaum</h1>
+      <p class="auth-subtitle">Familien-Netzwerk</p>
+
+      <!-- Login Form -->
+      <div id="auth-login" class="auth-form">
+        <div class="input-group">
+          <label>E-Mail</label>
+          <input type="email" id="login-email" placeholder="name@beispiel.de" autocomplete="email">
+        </div>
+        <div class="input-group">
+          <label>Passwort</label>
+          <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+        </div>
+        <button id="btn-login" class="btn btn-primary">Anmelden</button>
+        <button id="btn-google" class="btn btn-secondary">
+          <span class="btn-icon">G</span> Mit Google anmelden
+        </button>
+        <p class="auth-switch">Noch kein Konto? <a href="#" id="show-register">Registrieren</a></p>
+      </div>
+
+      <!-- Register Form -->
+      <div id="auth-register" class="auth-form hidden">
+        <div class="input-group">
+          <label>Vorname</label>
+          <input type="text" id="reg-firstname" placeholder="Max">
+        </div>
+        <div class="input-group">
+          <label>Nachname</label>
+          <input type="text" id="reg-lastname" placeholder="von Musterstein">
+        </div>
+        <div class="input-group">
+          <label>Geburtsname (falls abweichend)</label>
+          <input type="text" id="reg-birthname" placeholder="geb. von Beispielhausen">
+        </div>
+        <div class="input-group">
+          <label>E-Mail</label>
+          <input type="email" id="reg-email" placeholder="name@beispiel.de" autocomplete="email">
+        </div>
+        <div class="input-group">
+          <label>Passwort</label>
+          <input type="password" id="reg-password" placeholder="Mindestens 6 Zeichen" autocomplete="new-password">
+        </div>
+        <button id="btn-register" class="btn btn-primary">Registrieren</button>
+        <button id="btn-google-reg" class="btn btn-secondary">
+          <span class="btn-icon">G</span> Mit Google registrieren
+        </button>
+        <p class="auth-switch">Schon registriert? <a href="#" id="show-login">Anmelden</a></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- CLAIM / FIRST LOGIN VIEW                -->
+  <!-- ═══════════════════════════════════════ -->
+  <div id="view-claim" class="view">
+    <div class="claim-container">
+      <div class="view-header">
+        <h2>Willkommen in der Familie!</h2>
+        <p>Vielleicht hat jemand dich schon im Stammbaum angelegt. Lass uns nachsehen.</p>
+      </div>
+      <div class="input-group">
+        <label>Suche deinen Namen</label>
+        <input type="text" id="claim-search" placeholder="Vor- oder Nachname eingeben...">
+      </div>
+      <div id="claim-results" class="claim-results"></div>
+      <div class="claim-divider">
+        <span>oder</span>
+      </div>
+      <button id="btn-claim-new" class="btn btn-secondary">Neues Profil erstellen</button>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- MAIN APP VIEW                            -->
+  <!-- ═══════════════════════════════════════ -->
+  <div id="view-main" class="view">
+
+    <!-- Top Bar -->
+    <header id="top-bar">
+      <button id="btn-menu" class="icon-btn" aria-label="Menü">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <div id="search-bar" class="search-bar">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" id="search-input" placeholder="Name suchen...">
+      </div>
+      <button id="btn-scan" class="icon-btn" aria-label="QR scannen">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+      </button>
+    </header>
+
+    <!-- Tree Container -->
+    <div id="tree-container"></div>
+
+    <!-- Search Results Dropdown -->
+    <div id="search-results" class="search-results hidden"></div>
+
+    <!-- Floating Action Buttons -->
+    <div id="fab-container">
+      <button id="fab-add" class="fab" aria-label="Person hinzufügen">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </button>
+      <button id="fab-myqr" class="fab fab-small" aria-label="Mein QR-Code">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/><circle cx="17.5" cy="17.5" r="2.5"/>
+        </svg>
+      </button>
+      <button id="fab-center" class="fab fab-small" aria-label="Auf mich zentrieren">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Connection Side Panel (shown when comparing two profiles) -->
+    <div id="connection-overlay" class="connection-panel hidden">
+      <div class="overlay-content">
+        <button class="overlay-close" id="close-connection">&times;</button>
+        <div id="connection-header">
+          <div class="connection-person" id="conn-person-a"></div>
+          <div class="connection-line">
+            <svg width="40" height="4"><line x1="0" y1="2" x2="40" y2="2" stroke="#e63946" stroke-width="2"/></svg>
+          </div>
+          <div class="connection-person" id="conn-person-b"></div>
+        </div>
+        <div id="connection-details">
+          <div class="conn-detail">
+            <span class="conn-label">Verwandtschaft</span>
+            <span class="conn-value" id="conn-relation">—</span>
+          </div>
+          <div class="conn-detail">
+            <span class="conn-label">Gemeinsame DNA</span>
+            <span class="conn-value" id="conn-dna">—</span>
+          </div>
+          <div class="conn-detail">
+            <span class="conn-label">Pfadlänge</span>
+            <span class="conn-value" id="conn-path">—</span>
+          </div>
+          <div class="conn-detail">
+            <span class="conn-label">Gemeinsamer Vorfahre</span>
+            <span class="conn-value" id="conn-ancestor">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- PROFILE VIEW                             -->
+  <!-- ═══════════════════════════════════════ -->
+  <div id="view-profile" class="view">
+    <div class="profile-container">
+      <header class="profile-header">
+        <button id="btn-profile-back" class="icon-btn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <button id="btn-profile-edit" class="icon-btn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+      </header>
+      <div class="profile-photo-wrap">
+        <div id="profile-photo" class="profile-photo">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="1.5">
+            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+        </div>
+      </div>
+      <h2 id="profile-name" class="profile-name"></h2>
+      <p id="profile-birthname" class="profile-birthname"></p>
+      <div id="profile-badges" class="profile-badges"></div>
+
+      <div class="profile-section">
+        <h3>Details</h3>
+        <div class="profile-field">
+          <span class="field-label">Geburtsdatum</span>
+          <span class="field-value" id="profile-birthdate">—</span>
+        </div>
+        <div class="profile-field" id="profile-deathdate-row">
+          <span class="field-label">Sterbedatum</span>
+          <span class="field-value" id="profile-deathdate">—</span>
+        </div>
+        <div class="profile-field">
+          <span class="field-label">Wohnort</span>
+          <span class="field-value" id="profile-location">—</span>
+        </div>
+        <div class="profile-field">
+          <span class="field-label">Kontakt</span>
+          <span class="field-value" id="profile-contact">—</span>
+        </div>
+      </div>
+
+      <div class="profile-section">
+        <h3>Vita</h3>
+        <p id="profile-notes" class="profile-notes">—</p>
+      </div>
+
+      <!-- Existing Relationships Section -->
+      <div id="profile-relations" class="profile-section" style="display:none;">
+        <h3>Verbindungen</h3>
+        <div id="profile-relations-list"></div>
+      </div>
+
+      <div class="profile-actions">
+        <button id="btn-show-connection" class="btn btn-primary">Wie sind wir verwandt?</button>
+        <button id="btn-show-qr" class="btn btn-secondary">QR-Code zeigen</button>
+        <button id="btn-show-in-tree" class="btn btn-secondary">Im Stammbaum zeigen</button>
+        <button id="btn-delete-member" class="btn btn-danger" style="display:none; margin-top:16px;">Platzhalter löschen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- EDIT PROFILE VIEW                        -->
+  <!-- ═══════════════════════════════════════ -->
+  <div id="view-edit" class="view">
+    <div class="edit-container">
+      <header class="edit-header">
+        <button id="btn-edit-cancel" class="icon-btn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <h2>Profil bearbeiten</h2>
+        <button id="btn-edit-save" class="btn btn-small btn-primary">Speichern</button>
+      </header>
+      <div class="edit-form">
+        <div class="input-group">
+          <label>Vorname *</label>
+          <input type="text" id="edit-firstname">
+        </div>
+        <div class="input-group">
+          <label>Nachname *</label>
+          <input type="text" id="edit-lastname">
+        </div>
+        <div class="input-group">
+          <label>Geburtsname</label>
+          <input type="text" id="edit-birthname" placeholder="geb. ...">
+        </div>
+        <div class="input-group">
+          <label>Geburtsdatum</label>
+          <input type="date" id="edit-birthdate">
+        </div>
+        <div class="input-group">
+          <label>Sterbedatum</label>
+          <input type="date" id="edit-deathdate">
+        </div>
+        <div class="input-group">
+          <label>Wohnort</label>
+          <input type="text" id="edit-location" placeholder="Stadt, Land">
+        </div>
+        <div class="input-group">
+          <label>E-Mail</label>
+          <input type="email" id="edit-email">
+        </div>
+        <div class="input-group">
+          <label>Telefon</label>
+          <input type="tel" id="edit-phone">
+        </div>
+        <div class="input-group">
+          <label>Foto-URL</label>
+          <input type="url" id="edit-photo" placeholder="https://...">
+        </div>
+        <div class="input-group">
+          <label>Vita / Notizen</label>
+          <textarea id="edit-notes" rows="4" placeholder="Kurze Biographie, Interessen..."></textarea>
+        </div>
+
+        <div class="edit-section">
+          <h3>Verbindungen</h3>
+          <div id="edit-existing-rels"></div>
+          <h3 class="mt-16">Neue Verbindung</h3>
+          <p class="hint">Verbinde dieses Profil mit einem anderen Familienmitglied</p>
+          <div class="input-group">
+            <label>Beziehungstyp</label>
+            <select id="edit-rel-type">
+              <option value="">— Auswählen —</option>
+              <option value="parent">Ist Elternteil von...</option>
+              <option value="child">Ist Kind von...</option>
+              <option value="sibling">Ist Geschwister von...</option>
+              <option value="spouse">Ist verheiratet mit...</option>
+            </select>
+          </div>
+          <div class="input-group">
+            <label>Person suchen oder neu anlegen</label>
+            <input type="text" id="edit-rel-search" placeholder="Name eingeben...">
+            <div id="edit-rel-results" class="mini-results"></div>
+          </div>
+          <button id="btn-add-relation" class="btn btn-secondary">Verbindung hinzufügen</button>
+          <button id="btn-add-new-person" class="btn btn-secondary">Neue Person anlegen & verbinden</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- QR CODE VIEW                             -->
+  <!-- ═══════════════════════════════════════ -->
+  <div id="view-qr" class="view">
+    <div class="qr-container">
+      <header class="qr-header">
+        <button id="btn-qr-back" class="icon-btn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <h2>Mein QR-Code</h2>
+      </header>
+      <div class="qr-display">
+        <div id="qr-code-canvas"></div>
+        <p class="qr-hint">Andere scannen diesen Code,<br>um eure Verbindung zu sehen.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- QR SCANNER VIEW                          -->
+  <!-- ═══════════════════════════════════════ -->
+  <div id="view-scanner" class="view">
+    <div class="scanner-container">
+      <header class="scanner-header">
+        <button id="btn-scanner-back" class="icon-btn">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+        </button>
+        <h2>QR-Code scannen</h2>
+      </header>
+      <div id="qr-reader"></div>
+      <p class="scanner-hint">Halte die Kamera auf den QR-Code<br>eines Familienmitglieds.</p>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- SIDE MENU                                -->
+  <!-- ═══════════════════════════════════════ -->
+  <div id="side-menu" class="side-menu hidden">
+    <div class="menu-backdrop" id="menu-backdrop"></div>
+    <nav class="menu-content">
+      <div class="menu-header">
+        <div class="menu-user-photo" id="menu-photo"></div>
+        <div class="menu-user-name" id="menu-name"></div>
+        <div class="menu-user-email" id="menu-email"></div>
+      </div>
+      <ul class="menu-list">
+        <li><a href="#" id="menu-tree">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="14"/><line x1="6" y1="14" x2="18" y2="14"/><line x1="6" y1="14" x2="6" y2="19"/><line x1="18" y1="14" x2="18" y2="19"/></svg>
+          Stammbaum</a></li>
+        <li><a href="#" id="menu-profile">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Mein Profil</a></li>
+        <li><a href="#" id="menu-qr">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+          Mein QR-Code</a></li>
+        <li><a href="#" id="menu-scan">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          QR scannen</a></li>
+        <li class="menu-divider"></li>
+        <li><a href="#" id="menu-logout">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Abmelden</a></li>
+      </ul>
+    </nav>
+  </div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- TOAST NOTIFICATIONS                      -->
+  <!-- ═══════════════════════════════════════ -->
+  <div id="toast-container"></div>
+
+  <!-- ═══════════════════════════════════════ -->
+  <!-- SCRIPTS                                  -->
+  <!-- ═══════════════════════════════════════ -->
+  <!-- Supabase JS Client -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Cytoscape.js -->
+  <script src="https://unpkg.com/cytoscape@3.30.4/dist/cytoscape.min.js"></script>
+  <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
+  <script src="https://unpkg.com/cytoscape-dagre@2.5.0/cytoscape-dagre.js"></script>
+
+  <!-- QR Code libs -->
+  <script src="https://unpkg.com/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <!-- App modules -->
+  <script src="js/db.js?v=9"></script>
+  <script src="js/auth.js?v=9"></script>
+  <script src="js/relationship.js?v=9"></script>
+  <script src="js/tree.js?v=9"></script>
+  <script src="js/qr.js?v=9"></script>
+  <script src="js/profile.js?v=9"></script>
+  <script src="js/search.js?v=9"></script>
+  <script src="js/app.js?v=9"></script>
+</body>
+</html>

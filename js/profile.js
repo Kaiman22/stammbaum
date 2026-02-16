@@ -1,0 +1,589 @@
+/* ═══════════════════════════════════════════════════════════
+   STAMMBAUM – Profile Management
+   ═══════════════════════════════════════════════════════════ */
+
+const Profile = (() => {
+  let currentProfileId = null;
+  let editingMemberId = null;
+  let selectedRelTarget = null;
+
+  // ─── German labels for relationship types ───
+  const REL_LABELS = {
+    parent: 'Elternteil',
+    child: 'Kind',
+    spouse: 'Partner',
+    sibling: 'Geschwister',
+  };
+
+  /**
+   * Show a member's profile.
+   */
+  async function show(memberId) {
+    currentProfileId = memberId;
+    const member = await DB.getMember(memberId);
+    if (!member) {
+      App.toast('Profil nicht gefunden', 'error');
+      return;
+    }
+
+    // Fill profile view
+    const nameEl = document.getElementById('profile-name');
+    const birthnameEl = document.getElementById('profile-birthname');
+    const photoEl = document.getElementById('profile-photo');
+    const birthdateEl = document.getElementById('profile-birthdate');
+    const deathdateEl = document.getElementById('profile-deathdate');
+    const deathdateRow = document.getElementById('profile-deathdate-row');
+    const locationEl = document.getElementById('profile-location');
+    const contactEl = document.getElementById('profile-contact');
+    const notesEl = document.getElementById('profile-notes');
+    const badgesEl = document.getElementById('profile-badges');
+
+    nameEl.textContent = `${member.firstName} ${member.lastName}`;
+    birthnameEl.textContent = member.birthName || '';
+    birthnameEl.style.display = member.birthName ? '' : 'none';
+
+    // Photo
+    if (member.photo) {
+      photoEl.innerHTML = `<img src="${member.photo}" alt="${member.firstName}">`;
+    } else {
+      const initials = `${member.firstName[0]}${member.lastName[0]}`.toUpperCase();
+      photoEl.innerHTML = `<span style="font-size:36px;font-weight:600;color:#9ca3af">${initials}</span>`;
+    }
+
+    // Details
+    birthdateEl.textContent = member.birthDate ? formatDate(member.birthDate) : '—';
+    if (member.isDeceased && member.deathDate) {
+      deathdateEl.textContent = formatDate(member.deathDate);
+      deathdateRow.style.display = '';
+    } else {
+      deathdateRow.style.display = 'none';
+    }
+    locationEl.textContent = member.location || '—';
+    contactEl.textContent = member.contact || member.email || '—';
+    notesEl.textContent = member.notes || '—';
+
+    // Badges
+    badgesEl.innerHTML = '';
+    if (member.isDeceased) {
+      badgesEl.innerHTML += '<span class="badge badge-deceased">✝ Verstorben</span>';
+    }
+    if (member.claimedByUid) {
+      // Claimed members are registered, never show "Platzhalter"
+      badgesEl.innerHTML += '<span class="badge">✓ Registriert</span>';
+    } else if (member.isPlaceholder) {
+      badgesEl.innerHTML += '<span class="badge badge-placeholder">◌ Platzhalter</span>';
+    }
+
+    // Everyone can edit any profile (for adding/removing relationships)
+    const user = Auth.getUser();
+    const myMember = Auth.getMember();
+    document.getElementById('btn-profile-edit').style.display = '';
+
+    // Show/hide "How are we connected?" button
+    const showConnBtn = myMember && myMember.id !== memberId;
+    document.getElementById('btn-show-connection').style.display = showConnBtn ? '' : 'none';
+
+    // Show/hide delete button: only for true placeholders (not claimed), and not own profile
+    const isTruePlaceholder = member.isPlaceholder && !member.claimedByUid;
+    const canDelete = isTruePlaceholder && (!myMember || myMember.id !== memberId);
+    document.getElementById('btn-delete-member').style.display = canDelete ? '' : 'none';
+
+    // Show existing relationships
+    await renderProfileRelations(memberId);
+
+    App.showView('view-profile');
+  }
+
+  /**
+   * Render the relationships list in the profile view.
+   */
+  async function renderProfileRelations(memberId) {
+    const section = document.getElementById('profile-relations');
+    const list = document.getElementById('profile-relations-list');
+
+    const rels = await DB.getRelationshipsForMember(memberId);
+    if (rels.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+
+    section.style.display = '';
+    list.innerHTML = '';
+
+    // We need member names for display
+    const memberIds = new Set();
+    for (const r of rels) {
+      memberIds.add(r.fromId);
+      memberIds.add(r.toId);
+    }
+    memberIds.delete(memberId);
+
+    // Get names from cached data (via App) or fetch individually
+    const nameMap = new Map();
+    for (const id of memberIds) {
+      const m = await DB.getMember(id);
+      if (m) nameMap.set(id, `${m.firstName} ${m.lastName}`);
+    }
+
+    for (const r of rels) {
+      const otherId = r.fromId === memberId ? r.toId : r.fromId;
+      const otherName = nameMap.get(otherId) || 'Unbekannt';
+
+      // Determine the readable type from this member's perspective
+      let displayType;
+      if (r.type === 'parent_child') {
+        displayType = r.fromId === memberId ? 'child' : 'parent';
+        // fromId is parent, toId is child
+        // So if fromId === memberId, this member IS the parent → the other is their child
+        // If toId === memberId, this member IS the child → the other is their parent
+      } else {
+        displayType = r.type; // 'spouse' or 'sibling'
+      }
+
+      const item = document.createElement('div');
+      item.className = 'rel-item';
+      item.innerHTML = `
+        <span class="rel-type-badge ${displayType}">${REL_LABELS[displayType]}</span>
+        <span class="rel-name">${otherName}</span>
+        <button class="rel-delete" title="Verbindung löschen">&times;</button>
+      `;
+
+      // Click on name → go to that person's profile
+      item.querySelector('.rel-name').addEventListener('click', () => {
+        show(otherId);
+      });
+
+      // Click delete → remove relationship
+      item.querySelector('.rel-delete').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const typeName = REL_LABELS[displayType];
+        if (!confirm(`Verbindung "${typeName}: ${otherName}" wirklich löschen?`)) return;
+        try {
+          await DB.removeRelationship(r.id);
+          App.toast('Verbindung gelöscht', 'success');
+          await App.refreshTree();
+          await renderProfileRelations(memberId);
+        } catch (err) {
+          console.error('Delete relation error:', err);
+          App.toast('Fehler beim Löschen', 'error');
+        }
+      });
+
+      list.appendChild(item);
+    }
+  }
+
+  /**
+   * Open edit form for a member.
+   */
+  async function edit(memberId) {
+    editingMemberId = memberId;
+    selectedRelTarget = null;
+
+    let member = null;
+    if (memberId) {
+      member = await DB.getMember(memberId);
+    }
+
+    // Fill form
+    document.getElementById('edit-firstname').value = member?.firstName || '';
+    document.getElementById('edit-lastname').value = member?.lastName || '';
+    document.getElementById('edit-birthname').value = member?.birthName || '';
+    document.getElementById('edit-birthdate').value = member?.birthDate || '';
+    document.getElementById('edit-deathdate').value = member?.deathDate || '';
+    document.getElementById('edit-location').value = member?.location || '';
+    document.getElementById('edit-email').value = member?.contact || member?.email || '';
+    document.getElementById('edit-phone').value = member?.phone || '';
+    document.getElementById('edit-photo').value = member?.photo || '';
+    document.getElementById('edit-notes').value = member?.notes || '';
+
+    // Clear relation search
+    document.getElementById('edit-rel-type').value = '';
+    document.getElementById('edit-rel-search').value = '';
+    document.getElementById('edit-rel-results').innerHTML = '';
+
+    // Render existing relationships in edit view
+    await renderEditRelations(memberId);
+
+    App.showView('view-edit');
+  }
+
+  /**
+   * Render existing relationships in the edit view.
+   */
+  async function renderEditRelations(memberId) {
+    const container = document.getElementById('edit-existing-rels');
+    if (!memberId) {
+      container.innerHTML = '<div class="rel-empty">Noch keine Verbindungen. Speichere zuerst das Profil.</div>';
+      return;
+    }
+
+    const rels = await DB.getRelationshipsForMember(memberId);
+    if (rels.length === 0) {
+      container.innerHTML = '<div class="rel-empty">Noch keine Verbindungen vorhanden.</div>';
+      return;
+    }
+
+    container.innerHTML = '';
+
+    const nameMap = new Map();
+    const ids = new Set();
+    for (const r of rels) {
+      ids.add(r.fromId);
+      ids.add(r.toId);
+    }
+    ids.delete(memberId);
+    for (const id of ids) {
+      const m = await DB.getMember(id);
+      if (m) nameMap.set(id, `${m.firstName} ${m.lastName}`);
+    }
+
+    for (const r of rels) {
+      const otherId = r.fromId === memberId ? r.toId : r.fromId;
+      const otherName = nameMap.get(otherId) || 'Unbekannt';
+
+      let displayType;
+      if (r.type === 'parent_child') {
+        displayType = r.fromId === memberId ? 'child' : 'parent';
+      } else {
+        displayType = r.type;
+      }
+
+      const item = document.createElement('div');
+      item.className = 'rel-item';
+      item.innerHTML = `
+        <span class="rel-type-badge ${displayType}">${REL_LABELS[displayType]}</span>
+        <span class="rel-name">${otherName}</span>
+        <button class="rel-delete" title="Verbindung löschen">&times;</button>
+      `;
+
+      item.querySelector('.rel-delete').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const typeName = REL_LABELS[displayType];
+        if (!confirm(`Verbindung "${typeName}: ${otherName}" wirklich löschen?`)) return;
+        try {
+          await DB.removeRelationship(r.id);
+          App.toast('Verbindung gelöscht', 'success');
+          await App.refreshTree();
+          await renderEditRelations(memberId);
+        } catch (err) {
+          console.error('Delete relation error:', err);
+          App.toast('Fehler beim Löschen', 'error');
+        }
+      });
+
+      container.appendChild(item);
+    }
+  }
+
+  /**
+   * Save profile changes.
+   */
+  async function save() {
+    const firstName = document.getElementById('edit-firstname').value.trim();
+    const lastName = document.getElementById('edit-lastname').value.trim();
+
+    if (!firstName || !lastName) {
+      App.toast('Vor- und Nachname sind Pflichtfelder', 'error');
+      return;
+    }
+
+    const data = {
+      firstName,
+      lastName,
+      birthName: document.getElementById('edit-birthname').value.trim(),
+      birthDate: document.getElementById('edit-birthdate').value,
+      deathDate: document.getElementById('edit-deathdate').value,
+      isDeceased: !!document.getElementById('edit-deathdate').value,
+      location: document.getElementById('edit-location').value.trim(),
+      contact: document.getElementById('edit-email').value.trim(),
+      phone: document.getElementById('edit-phone').value.trim(),
+      photo: document.getElementById('edit-photo').value.trim(),
+      notes: document.getElementById('edit-notes').value.trim(),
+    };
+
+    try {
+      if (editingMemberId) {
+        await DB.updateMember(editingMemberId, data);
+        App.toast('Profil gespeichert', 'success');
+      } else {
+        // Creating new member
+        data.isPlaceholder = true;
+        data.claimedByUid = null;
+        data.createdBy = Auth.getUser()?.id || null;
+        const newId = await DB.createMember(data);
+        editingMemberId = newId;
+        App.toast('Person angelegt', 'success');
+      }
+
+      // Reload tree
+      await App.refreshTree();
+
+      // Go back to profile
+      if (editingMemberId) {
+        show(editingMemberId);
+      } else {
+        App.showView('view-main');
+      }
+    } catch (err) {
+      console.error('Save error:', err);
+      App.toast('Fehler beim Speichern', 'error');
+    }
+  }
+
+  /**
+   * Search for a person to add as relation.
+   */
+  async function searchForRelation(query) {
+    const resultsEl = document.getElementById('edit-rel-results');
+    if (!query || query.length < 2) {
+      resultsEl.innerHTML = '';
+      return;
+    }
+
+    const results = await DB.searchMembers(query);
+    // Filter out self
+    const filtered = results.filter(m => m.id !== editingMemberId);
+
+    resultsEl.innerHTML = filtered.slice(0, 5).map(m => `
+      <div class="mini-result-item" data-id="${m.id}">
+        ${m.firstName} ${m.lastName}
+        ${m.birthDate ? ` (* ${m.birthDate.substring(0, 4)})` : ''}
+      </div>
+    `).join('');
+
+    // Add click handlers
+    resultsEl.querySelectorAll('.mini-result-item').forEach(el => {
+      el.addEventListener('click', () => {
+        selectedRelTarget = el.dataset.id;
+        document.getElementById('edit-rel-search').value =
+          el.textContent.trim();
+        resultsEl.innerHTML = '';
+      });
+    });
+  }
+
+  /**
+   * Check for and remove conflicting relationships before adding a new one.
+   *
+   * Rules:
+   * - Can't be both parent-of AND child-of same person
+   * - Can't be both parent-of AND sibling-of same person
+   * - Can't be both child-of AND sibling-of same person
+   * - Can't have duplicate spouse edges
+   * - Can't be parent AND spouse of same person
+   * - Can't be child AND spouse of same person
+   * - Can't be sibling AND spouse of same person
+   *
+   * When adding a new connection, conflicting old ones are removed.
+   */
+  async function cleanConflictingRelations(memberId, targetId, newRelType) {
+    const rels = await DB.getRelationshipsForMember(memberId);
+    const toRemove = [];
+
+    for (const r of rels) {
+      const otherId = r.fromId === memberId ? r.toId : r.fromId;
+      if (otherId !== targetId) continue;
+
+      // Determine the type from memberId's perspective
+      let existingType;
+      if (r.type === 'parent_child') {
+        existingType = r.fromId === memberId ? 'parent_of' : 'child_of';
+      } else {
+        existingType = r.type; // 'spouse' or 'sibling'
+      }
+
+      // Determine the new type from memberId's perspective
+      let newType;
+      if (newRelType === 'parent') {
+        newType = 'parent_of'; // memberId is parent of target
+      } else if (newRelType === 'child') {
+        newType = 'child_of'; // memberId is child of target
+      } else {
+        newType = newRelType; // 'spouse' or 'sibling'
+      }
+
+      // Check conflicts — any existing relationship between the same two people
+      // that conflicts with the new one should be removed
+      const conflictPairs = [
+        ['parent_of', 'child_of'],   // can't be parent AND child of same person
+        ['parent_of', 'sibling'],    // can't be parent AND sibling of same person
+        ['child_of', 'sibling'],     // can't be child AND sibling of same person
+        ['parent_of', 'spouse'],     // can't be parent AND spouse of same person
+        ['child_of', 'spouse'],      // can't be child AND spouse of same person
+        ['sibling', 'spouse'],       // can't be sibling AND spouse of same person
+      ];
+
+      // If it's a duplicate of the same type, also conflict
+      if (existingType === newType) {
+        toRemove.push(r);
+        continue;
+      }
+
+      for (const [a, b] of conflictPairs) {
+        if ((existingType === a && newType === b) ||
+            (existingType === b && newType === a)) {
+          toRemove.push(r);
+          break;
+        }
+      }
+    }
+
+    // Remove conflicting relationships
+    for (const r of toRemove) {
+      try {
+        await DB.removeRelationship(r.id);
+      } catch (err) {
+        console.error('Failed to remove conflicting relation:', err);
+      }
+    }
+
+    return toRemove.length;
+  }
+
+  /**
+   * Add a relationship between the editing member and selected target.
+   */
+  async function addRelation() {
+    if (!editingMemberId || !selectedRelTarget) {
+      App.toast('Bitte wähle eine Person aus', 'error');
+      return;
+    }
+
+    const relType = document.getElementById('edit-rel-type').value;
+    if (!relType) {
+      App.toast('Bitte wähle einen Beziehungstyp', 'error');
+      return;
+    }
+
+    try {
+      // Clean conflicting relationships first
+      const removed = await cleanConflictingRelations(editingMemberId, selectedRelTarget, relType);
+      if (removed > 0) {
+        App.toast(`${removed} widersprüchliche Verbindung${removed > 1 ? 'en' : ''} entfernt`, 'info');
+      }
+
+      if (relType === 'parent') {
+        // This member is parent of target
+        await DB.addRelationship(editingMemberId, selectedRelTarget, 'parent_child');
+      } else if (relType === 'child') {
+        // This member is child of target (target is parent)
+        await DB.addRelationship(selectedRelTarget, editingMemberId, 'parent_child');
+      } else if (relType === 'spouse') {
+        await DB.addRelationship(editingMemberId, selectedRelTarget, 'spouse');
+      } else if (relType === 'sibling') {
+        await DB.addRelationship(editingMemberId, selectedRelTarget, 'sibling');
+      }
+
+      App.toast('Verbindung hinzugefügt', 'success');
+      document.getElementById('edit-rel-type').value = '';
+      document.getElementById('edit-rel-search').value = '';
+      document.getElementById('edit-rel-results').innerHTML = '';
+      selectedRelTarget = null;
+
+      await App.refreshTree();
+      // Refresh the existing relations list in the edit view
+      await renderEditRelations(editingMemberId);
+    } catch (err) {
+      console.error('Relation error:', err);
+      App.toast('Fehler beim Hinzufügen', 'error');
+    }
+  }
+
+  /**
+   * Create a new person and add a relation.
+   */
+  async function addNewPersonAndRelate() {
+    const relType = document.getElementById('edit-rel-type').value;
+    if (!relType) {
+      App.toast('Bitte wähle zuerst einen Beziehungstyp', 'error');
+      return;
+    }
+
+    if (!editingMemberId) {
+      // Need to save current profile first
+      await save();
+    }
+
+    // Save the relation type and context, then open a blank edit form
+    const sourceId = editingMemberId;
+    const pendingRelType = relType;
+
+    // Create a minimal placeholder
+    const name = document.getElementById('edit-rel-search').value.trim();
+    const parts = name.split(' ');
+    const firstName = parts[0] || 'Unbekannt';
+    const lastName = parts.slice(1).join(' ') || 'Unbekannt';
+
+    const newId = await DB.createMember({
+      firstName,
+      lastName,
+      birthName: '',
+      birthDate: '',
+      deathDate: '',
+      isDeceased: false,
+      isPlaceholder: true,
+      claimedByUid: null,
+      createdBy: Auth.getUser()?.id || null,
+      location: '',
+      contact: '',
+      photo: '',
+      notes: '',
+    });
+
+    // Clean conflicting relationships before adding
+    await cleanConflictingRelations(sourceId, newId, pendingRelType);
+
+    // Add the relation
+    if (pendingRelType === 'parent') {
+      await DB.addRelationship(sourceId, newId, 'parent_child');
+    } else if (pendingRelType === 'child') {
+      await DB.addRelationship(newId, sourceId, 'parent_child');
+    } else if (pendingRelType === 'spouse') {
+      await DB.addRelationship(sourceId, newId, 'spouse');
+    } else if (pendingRelType === 'sibling') {
+      await DB.addRelationship(sourceId, newId, 'sibling');
+    }
+
+    App.toast(`${firstName} ${lastName} angelegt & verbunden`, 'success');
+    await App.refreshTree();
+
+    // Open the new person's edit form
+    edit(newId);
+  }
+
+  function getCurrentProfileId() {
+    return currentProfileId;
+  }
+
+  function getEditingMemberId() {
+    return editingMemberId;
+  }
+
+  // ─── Helpers ───
+
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+      const date = new Date(dateStr + 'T00:00:00');
+      return date.toLocaleDateString('de-DE', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      });
+    } catch {
+      return dateStr;
+    }
+  }
+
+  return {
+    show,
+    edit,
+    save,
+    searchForRelation,
+    addRelation,
+    addNewPersonAndRelate,
+    getCurrentProfileId,
+    getEditingMemberId,
+  };
+})();
