@@ -119,21 +119,6 @@ const Auth = (() => {
     }
   }
 
-  async function loginWithGoogle() {
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin + window.location.pathname,
-        },
-      });
-      if (error) return { success: false, error: mapAuthError(error.message) };
-      return { success: true };
-    } catch (err) {
-      return { success: false, error: err.message };
-    }
-  }
-
   async function resetPassword(email) {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
@@ -182,7 +167,6 @@ const Auth = (() => {
     setMember,
     loginWithEmail,
     registerWithEmail,
-    loginWithGoogle,
     resetPassword,
     updatePassword,
     onPasswordRecovery,

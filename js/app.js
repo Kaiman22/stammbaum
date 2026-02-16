@@ -68,7 +68,6 @@ const App = (() => {
   function bindEvents() {
     // Auth - Login
     document.getElementById('btn-login').addEventListener('click', handleLogin);
-    document.getElementById('btn-google').addEventListener('click', handleGoogleLogin);
     document.getElementById('show-register').addEventListener('click', (e) => {
       e.preventDefault();
       document.getElementById('auth-login').classList.add('hidden');
@@ -99,7 +98,6 @@ const App = (() => {
 
     // Auth - Register
     document.getElementById('btn-register').addEventListener('click', handleRegister);
-    document.getElementById('btn-google-reg').addEventListener('click', handleGoogleLogin);
     document.getElementById('show-login').addEventListener('click', (e) => {
       e.preventDefault();
       document.getElementById('auth-register').classList.add('hidden');
@@ -249,11 +247,6 @@ const App = (() => {
     } else {
       toast('Willkommen! Registrierung erfolgreich.', 'success');
     }
-  }
-
-  async function handleGoogleLogin() {
-    const result = await Auth.loginWithGoogle();
-    if (!result.success) toast(result.error, 'error');
   }
 
   async function handleForgotPassword() {

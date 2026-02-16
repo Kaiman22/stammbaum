@@ -60,6 +60,15 @@ const Tree = (() => {
         clearHighlight();
       }
     });
+
+    // When the page becomes visible again (tab switch, app resume),
+    // Cytoscape may lose its rendered styles. Force a style update + resize.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && cy) {
+        cy.resize();
+        cy.style().update();
+      }
+    });
   }
 
   function onNodeTap(callback) {
@@ -546,18 +555,48 @@ const Tree = (() => {
       });
     }
 
-    // Spouse edges (between partners)
+    // Spouse edges: split into two halves through the couple midpoint
+    // so that each half can be independently highlighted in red.
+    // If no couple midpoint exists (shouldn't happen), fall back to direct edge.
     for (const se of spouseEdges) {
-      elements.push({
-        group: 'edges',
-        data: {
-          id: `e-${se.id}`,
-          source: se.from,
-          target: se.to,
-          relType: 'spouse',
-        },
-        classes: 'spouse-edge',
-      });
+      const coupleId = inCouple.get(se.from);
+      if (coupleId) {
+        // Two half-edges through the midpoint
+        elements.push({
+          group: 'edges',
+          data: {
+            id: `e-spouse-${se.from}-mid`,
+            source: se.from,
+            target: coupleId,
+            relType: 'spouse',
+            spouseHalf: 'a',
+          },
+          classes: 'spouse-edge',
+        });
+        elements.push({
+          group: 'edges',
+          data: {
+            id: `e-spouse-mid-${se.to}`,
+            source: coupleId,
+            target: se.to,
+            relType: 'spouse',
+            spouseHalf: 'b',
+          },
+          classes: 'spouse-edge',
+        });
+      } else {
+        // Fallback: direct edge
+        elements.push({
+          group: 'edges',
+          data: {
+            id: `e-${se.id}`,
+            source: se.from,
+            target: se.to,
+            relType: 'spouse',
+          },
+          classes: 'spouse-edge',
+        });
+      }
     }
 
     // Parent-child edges: route through couple midpoint
@@ -820,19 +859,16 @@ const Tree = (() => {
   /**
    * Highlight the path between two members.
    *
-   * Edge routing: parent→child edges go through invisible couple-midpoint
-   * nodes.  The BFS path (from Relationship module) returns person IDs only,
-   * so a pair like [Stephan, Thomas] won't match any Cytoscape edge directly
-   * because the real edge is  couple-<StephanId>-<...> → Thomas.
+   * Edge routing in Cytoscape:
+   * - Parent→child edges go through invisible couple-midpoint nodes.
+   * - Spouse edges are SPLIT into two halves: Person↔Midpoint and Midpoint↔Person.
+   *   This allows us to highlight only the relevant half when the path goes
+   *   through one spouse down to a child (without lighting up the other spouse's half).
    *
-   * Strategy:
-   *   1. Build a lookup of which couple-midpoint each person belongs to.
-   *   2. For each pair [A, B] on the path, first try a direct edge.
-   *   3. If none found, try edges that go through a couple midpoint that
-   *      contains A (source side) or B (target side).
-   *   4. If pair is parent→child routed through midpoint, also highlight
-   *      the spouse edge between the parent and their partner AND the
-   *      midpoint→child edge (two hops in Cytoscape for one hop in BFS).
+   * The BFS path returns person IDs only, so for each pair [A, B]:
+   * 1. Try direct Cytoscape edge A↔B.
+   * 2. If spouse pair: highlight both halves A↔mid and mid↔B.
+   * 3. If parent→child through midpoint: highlight A↔mid (spouse half) + mid→Child.
    */
   function highlightConnection(fromId, toId) {
     clearHighlight();
@@ -844,15 +880,12 @@ const Tree = (() => {
 
     highlightedPath = pathNodeIds;
 
-    // Build a lookup: personId → coupleNodeId  (from the couples built in layout)
+    // Build a lookup: personId → coupleNodeId
     const personToCouple = new Map();
     cy.nodes('.couple-midpoint').forEach(cpNode => {
-      const cpId = cpNode.id(); // "couple-<uuidA>-<uuidB>"
-      // Extract the two member UUIDs from the couple ID
-      // Format: "couple-" + uuidA + "-" + uuidB   (UUIDs are 36 chars with dashes)
+      const cpId = cpNode.id();
       const inner = cpId.substring('couple-'.length);
-      // UUIDs are 36 characters each, joined by a "-"
-      if (inner.length >= 73) { // 36 + 1 + 36
+      if (inner.length >= 73) {
         const memberA = inner.substring(0, 36);
         const memberB = inner.substring(37);
         personToCouple.set(memberA, cpId);
@@ -874,61 +907,65 @@ const Tree = (() => {
     // Helper: highlight an edge + un-dim any couple midpoint it touches
     function highlightEdge(edge) {
       edge.removeClass('dimmed').addClass('highlighted');
-      // Un-dim couple midpoint nodes that this edge touches
       const s = edge.data('source');
       const t = edge.data('target');
       if (s.startsWith('couple-')) cy.getElementById(s).removeClass('dimmed');
       if (t.startsWith('couple-')) cy.getElementById(t).removeClass('dimmed');
     }
 
-    // Highlight path edges
-    for (const [from, to] of pathEdgePairs) {
-      // 1) Try direct edge between from↔to
-      const directEdges = cy.edges().filter(e => {
+    // Helper: find edges between two Cytoscape node IDs
+    function findEdges(idA, idB) {
+      return cy.edges().filter(e => {
         const s = e.data('source');
         const t = e.data('target');
-        return (s === from && t === to) || (s === to && t === from);
+        return (s === idA && t === idB) || (s === idB && t === idA);
       });
+    }
 
+    // Highlight path edges
+    for (const [from, to] of pathEdgePairs) {
+      const coupleOfFrom = personToCouple.get(from);
+      const coupleOfTo = personToCouple.get(to);
+
+      // 1) Direct edge (e.g. sibling edge, or single parent → child)
+      const directEdges = findEdges(from, to);
       if (directEdges.length > 0) {
         directEdges.forEach(e => highlightEdge(e));
         continue;
       }
 
-      // 2) No direct edge → check if edges are routed through a couple midpoint.
-      //    Case A: parent→child edge. The BFS says [Parent, Child] but Cytoscape has
-      //            coupleNode→Child.  We need to highlight:
-      //            - spouse edge: Parent ↔ Partner
-      //            - midpoint→child edge: coupleNode → Child
-      //    Case B: child→parent edge going up. BFS says [Child, Parent] but Cytoscape
-      //            has coupleNode→Child (reverse direction). Same treatment.
+      // 2) Both are in the SAME couple → spouse connection
+      //    Highlight both halves: from↔mid AND mid↔to
+      if (coupleOfFrom && coupleOfFrom === coupleOfTo) {
+        findEdges(from, coupleOfFrom).forEach(e => highlightEdge(e));
+        findEdges(coupleOfFrom, to).forEach(e => highlightEdge(e));
+        continue;
+      }
+
+      // 3) Parent→child through couple midpoint
+      //    BFS says [Parent, Child] but Cytoscape has Parent↔mid + mid→Child
       let found = false;
 
-      const coupleOfFrom = personToCouple.get(from);
-      const coupleOfTo = personToCouple.get(to);
-
-      // Try: coupleOfFrom → to  (parent going down to child)
       if (coupleOfFrom) {
-        const midEdges = cy.edges().filter(e => {
-          const s = e.data('source');
-          const t = e.data('target');
-          return (s === coupleOfFrom && t === to) || (s === to && t === coupleOfFrom);
-        });
-        if (midEdges.length > 0) {
-          midEdges.forEach(e => highlightEdge(e));
+        // Try: from's couple midpoint → to  (parent going down to child)
+        const midToChild = findEdges(coupleOfFrom, to);
+        if (midToChild.length > 0) {
+          // Highlight the spouse half: from → couple midpoint
+          findEdges(from, coupleOfFrom).forEach(e => highlightEdge(e));
+          // Highlight the parent-child edge: couple midpoint → child
+          midToChild.forEach(e => highlightEdge(e));
           found = true;
         }
       }
 
-      // Try: coupleOfTo → from  (child going up to parent)
       if (!found && coupleOfTo) {
-        const midEdges = cy.edges().filter(e => {
-          const s = e.data('source');
-          const t = e.data('target');
-          return (s === coupleOfTo && t === from) || (s === from && t === coupleOfTo);
-        });
-        if (midEdges.length > 0) {
-          midEdges.forEach(e => highlightEdge(e));
+        // Try: to's couple midpoint → from  (child going up to parent)
+        const midToParent = findEdges(coupleOfTo, from);
+        if (midToParent.length > 0) {
+          // Highlight the parent-child edge: couple midpoint → child(from)
+          midToParent.forEach(e => highlightEdge(e));
+          // Highlight the spouse half: to → couple midpoint
+          findEdges(to, coupleOfTo).forEach(e => highlightEdge(e));
           found = true;
         }
       }

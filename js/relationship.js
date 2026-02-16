@@ -286,9 +286,21 @@ const Relationship = (() => {
   /**
    * Estimate shared DNA percentage based on relationship.
    * Uses common ancestor when available, falls back to path-based estimation.
+   *
+   * Key rule: If the path between two people includes a spouse edge,
+   * they share 0% DNA (they are connected by marriage, not blood).
+   * DNA is only shared between blood relatives (parent-child, siblings, cousins).
    */
   function estimateSharedDNA(fromId, toId, graph) {
     if (fromId === toId) return 100;
+
+    // First, check the BFS path to see if it includes any spouse edges.
+    // If so, these two people are NOT blood-related → 0% shared DNA.
+    const path = findPath(fromId, toId, graph);
+    if (!path || path.length < 2) return null;
+
+    const hasSpouseEdge = path.slice(1).some(p => p.edgeType === 'spouse');
+    if (hasSpouseEdge) return 0;
 
     const common = findCommonAncestor(fromId, toId, graph);
 
@@ -312,11 +324,6 @@ const Relationship = (() => {
     }
 
     // Fallback: estimate via BFS path length
-    // This handles cases where people are connected via sibling/spouse edges
-    // without a detectable common ancestor in the graph
-    const path = findPath(fromId, toId, graph);
-    if (!path || path.length < 2) return null;
-
     // Count only blood-relation edges (parent, child, sibling)
     const bloodSteps = path.slice(1).filter(p =>
       p.edgeType === 'parent' || p.edgeType === 'child' || p.edgeType === 'sibling'
@@ -325,8 +332,6 @@ const Relationship = (() => {
     if (bloodSteps === 0) return null; // only spouse connections
 
     // Approximate: shared DNA ≈ (1/2)^(bloodSteps-1) * 100
-    // sibling = 1 step → 50%, parent-child = 1 step → 50%
-    // grandparent = 2 steps → 25%, etc.
     const shared = (1 / Math.pow(2, bloodSteps - 1)) * 100;
     return Math.max(0.01, shared).toFixed(2);
   }
