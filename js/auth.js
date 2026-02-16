@@ -7,6 +7,7 @@ const Auth = (() => {
   let currentUser = null;
   let currentMember = null;
   let onAuthChangeCallback = null;
+  let onPasswordRecoveryCallback = null;
 
   function init(supabaseClient) {
     supabase = supabaseClient;
@@ -20,6 +21,10 @@ const Auth = (() => {
         currentUser = null;
         currentMember = null;
         if (onAuthChangeCallback) onAuthChangeCallback(null, null);
+      } else if (event === 'PASSWORD_RECOVERY') {
+        // User clicked the password reset link in their email
+        currentUser = session?.user || null;
+        if (onPasswordRecoveryCallback) onPasswordRecoveryCallback();
       } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         currentUser = session?.user || null;
         // Defer the DB lookup to avoid AbortError during auth transitions
@@ -67,6 +72,10 @@ const Auth = (() => {
 
   function onAuthChange(callback) {
     onAuthChangeCallback = callback;
+  }
+
+  function onPasswordRecovery(callback) {
+    onPasswordRecoveryCallback = callback;
   }
 
   function getUser() {
@@ -125,6 +134,28 @@ const Auth = (() => {
     }
   }
 
+  async function resetPassword(email) {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + window.location.pathname,
+      });
+      if (error) return { success: false, error: mapAuthError(error.message) };
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  async function updatePassword(newPassword) {
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) return { success: false, error: mapAuthError(error.message) };
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }
+
   async function logout() {
     await supabase.auth.signOut();
     currentUser = null;
@@ -152,6 +183,9 @@ const Auth = (() => {
     loginWithEmail,
     registerWithEmail,
     loginWithGoogle,
+    resetPassword,
+    updatePassword,
+    onPasswordRecovery,
     logout,
   };
 })();

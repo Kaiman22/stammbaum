@@ -87,7 +87,33 @@
         <button id="btn-google" class="btn btn-secondary">
           <span class="btn-icon">G</span> Mit Google anmelden
         </button>
+        <p class="auth-forgot"><a href="#" id="show-forgot">Passwort vergessen?</a></p>
         <p class="auth-switch">Noch kein Konto? <a href="#" id="show-register">Registrieren</a></p>
+      </div>
+
+      <!-- Forgot Password Form -->
+      <div id="auth-forgot" class="auth-form hidden">
+        <p class="auth-hint">Gib deine E-Mail-Adresse ein. Du erhältst einen Link zum Zurücksetzen deines Passworts.</p>
+        <div class="input-group">
+          <label>E-Mail</label>
+          <input type="email" id="forgot-email" placeholder="name@beispiel.de" autocomplete="email">
+        </div>
+        <button id="btn-forgot-send" class="btn btn-primary">Link senden</button>
+        <p class="auth-switch"><a href="#" id="show-login-from-forgot">Zurück zur Anmeldung</a></p>
+      </div>
+
+      <!-- Set New Password Form (shown after clicking reset link) -->
+      <div id="auth-new-password" class="auth-form hidden">
+        <p class="auth-hint">Wähle ein neues Passwort für dein Konto.</p>
+        <div class="input-group">
+          <label>Neues Passwort</label>
+          <input type="password" id="new-password" placeholder="Mindestens 6 Zeichen" autocomplete="new-password">
+        </div>
+        <div class="input-group">
+          <label>Passwort bestätigen</label>
+          <input type="password" id="new-password-confirm" placeholder="Passwort wiederholen" autocomplete="new-password">
+        </div>
+        <button id="btn-set-new-password" class="btn btn-primary">Passwort ändern</button>
       </div>
 
       <!-- Register Form -->
@@ -471,13 +497,13 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
   <!-- App modules -->
-  <script src="js/db.js?v=9"></script>
-  <script src="js/auth.js?v=9"></script>
-  <script src="js/relationship.js?v=9"></script>
-  <script src="js/tree.js?v=9"></script>
-  <script src="js/qr.js?v=9"></script>
-  <script src="js/profile.js?v=9"></script>
-  <script src="js/search.js?v=9"></script>
-  <script src="js/app.js?v=9"></script>
+  <script src="js/db.js?v=10"></script>
+  <script src="js/auth.js?v=10"></script>
+  <script src="js/relationship.js?v=10"></script>
+  <script src="js/tree.js?v=10"></script>
+  <script src="js/qr.js?v=10"></script>
+  <script src="js/profile.js?v=10"></script>
+  <script src="js/search.js?v=10"></script>
+  <script src="js/app.js?v=10"></script>
 </body>
 </html>

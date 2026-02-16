@@ -43,6 +43,14 @@ const App = (() => {
       }
     });
 
+    // Listen for password recovery event (user clicked reset link in email)
+    Auth.onPasswordRecovery(() => {
+      // Show the "set new password" form
+      document.querySelectorAll('.auth-form').forEach(f => f.classList.add('hidden'));
+      document.getElementById('auth-new-password').classList.remove('hidden');
+      showView('view-auth');
+    });
+
     // Now init auth – this triggers onAuthStateChange immediately
     Auth.init(supabaseClient);
 
@@ -65,6 +73,28 @@ const App = (() => {
       e.preventDefault();
       document.getElementById('auth-login').classList.add('hidden');
       document.getElementById('auth-register').classList.remove('hidden');
+    });
+
+    // Auth - Forgot Password
+    document.getElementById('show-forgot').addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('auth-login').classList.add('hidden');
+      document.getElementById('auth-forgot').classList.remove('hidden');
+    });
+    document.getElementById('show-login-from-forgot').addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('auth-forgot').classList.add('hidden');
+      document.getElementById('auth-login').classList.remove('hidden');
+    });
+    document.getElementById('btn-forgot-send').addEventListener('click', handleForgotPassword);
+    document.getElementById('forgot-email').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleForgotPassword();
+    });
+
+    // Auth - Set New Password (after clicking reset link in email)
+    document.getElementById('btn-set-new-password').addEventListener('click', handleSetNewPassword);
+    document.getElementById('new-password-confirm').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleSetNewPassword();
     });
 
     // Auth - Register
@@ -224,6 +254,45 @@ const App = (() => {
   async function handleGoogleLogin() {
     const result = await Auth.loginWithGoogle();
     if (!result.success) toast(result.error, 'error');
+  }
+
+  async function handleForgotPassword() {
+    const email = document.getElementById('forgot-email').value.trim();
+    if (!email) {
+      toast('Bitte gib deine E-Mail-Adresse ein', 'error');
+      return;
+    }
+    const result = await Auth.resetPassword(email);
+    if (result.success) {
+      toast('E-Mail zum Zurücksetzen gesendet! Prüfe deinen Posteingang.', 'success');
+      // Switch back to login form
+      document.getElementById('auth-forgot').classList.add('hidden');
+      document.getElementById('auth-login').classList.remove('hidden');
+    } else {
+      toast(result.error, 'error');
+    }
+  }
+
+  async function handleSetNewPassword() {
+    const pw = document.getElementById('new-password').value;
+    const pwConfirm = document.getElementById('new-password-confirm').value;
+    if (!pw || pw.length < 6) {
+      toast('Passwort muss mindestens 6 Zeichen lang sein', 'error');
+      return;
+    }
+    if (pw !== pwConfirm) {
+      toast('Passwörter stimmen nicht überein', 'error');
+      return;
+    }
+    const result = await Auth.updatePassword(pw);
+    if (result.success) {
+      toast('Passwort erfolgreich geändert!', 'success');
+      // Hide form, auth state change will handle navigation
+      document.getElementById('auth-new-password').classList.add('hidden');
+      document.getElementById('auth-login').classList.remove('hidden');
+    } else {
+      toast(result.error, 'error');
+    }
   }
 
   // ─── Claim Handlers ───
