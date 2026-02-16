@@ -10,6 +10,8 @@ const Tree = (() => {
   let members = [];
   let relationships = [];
   let highlightedPath = [];
+  let highlightedFromId = null;
+  let highlightedToId = null;
   let onNodeTapCallback = null;
   let currentUserId = null;
 
@@ -62,11 +64,20 @@ const Tree = (() => {
     });
 
     // When the page becomes visible again (tab switch, app resume),
-    // Cytoscape may lose its rendered styles. Force a style update + resize.
+    // Cytoscape may lose its rendered styles entirely (canvas cleared while hidden).
+    // Simple cy.style().update() isn't enough — we must fully reapply the highlight.
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && cy) {
         cy.resize();
-        cy.style().update();
+        // If a highlight was active, reapply it completely
+        if (highlightedFromId && highlightedToId) {
+          const savedFrom = highlightedFromId;
+          const savedTo = highlightedToId;
+          // Re-run the full highlight logic (clearHighlight is called inside)
+          highlightConnection(savedFrom, savedTo);
+        } else {
+          cy.style().update();
+        }
       }
     });
   }
@@ -879,6 +890,8 @@ const Tree = (() => {
     if (pathNodeIds.length === 0) return;
 
     highlightedPath = pathNodeIds;
+    highlightedFromId = fromId;
+    highlightedToId = toId;
 
     // Build a lookup: personId → coupleNodeId
     const personToCouple = new Map();
@@ -987,6 +1000,8 @@ const Tree = (() => {
    */
   function clearHighlight() {
     highlightedPath = [];
+    highlightedFromId = null;
+    highlightedToId = null;
     cy.elements().removeClass('dimmed highlighted');
   }
 

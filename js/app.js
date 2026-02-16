@@ -280,9 +280,26 @@ const App = (() => {
     const result = await Auth.updatePassword(pw);
     if (result.success) {
       toast('Passwort erfolgreich geändert!', 'success');
-      // Hide form, auth state change will handle navigation
+      // Hide form
       document.getElementById('auth-new-password').classList.add('hidden');
-      document.getElementById('auth-login').classList.remove('hidden');
+      // Recovery mode is now cleared inside Auth.updatePassword().
+      // The user is already signed in (Supabase signed them in via recovery token).
+      // Trigger the normal auth flow to navigate them into the app.
+      const user = Auth.getUser();
+      if (user) {
+        const member = await DB.findMemberByUid(user.id);
+        if (member) {
+          Auth.setMember(member);
+          Tree.setCurrentUser(member.id);
+          await loadTree();
+          showView('view-main');
+        } else {
+          showView('view-claim');
+        }
+      } else {
+        // Shouldn't happen, but fallback to login
+        document.getElementById('auth-login').classList.remove('hidden');
+      }
     } else {
       toast(result.error, 'error');
     }

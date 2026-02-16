@@ -8,25 +8,49 @@ const Auth = (() => {
   let currentMember = null;
   let onAuthChangeCallback = null;
   let onPasswordRecoveryCallback = null;
+  let isRecoveryMode = false;
+
+  // Detect recovery mode from URL hash BEFORE Supabase processes it.
+  // Supabase recovery links contain type=recovery in the URL hash/params.
+  function detectRecoveryFromUrl() {
+    const hash = window.location.hash;
+    const search = window.location.search;
+    const fullUrl = hash + search;
+    if (fullUrl.includes('type=recovery') || fullUrl.includes('type=magiclink')) {
+      console.log('[Auth] Recovery mode detected from URL');
+      isRecoveryMode = true;
+    }
+  }
 
   function init(supabaseClient) {
     supabase = supabaseClient;
+
+    // Check URL for recovery tokens FIRST
+    detectRecoveryFromUrl();
 
     // Listen for auth state changes (login, logout, token refresh)
     // IMPORTANT: Don't make DB calls inside this callback — Supabase
     // aborts in-flight requests during auth state transitions.
     supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Auth] onAuthStateChange:', event);
+      console.log('[Auth] onAuthStateChange:', event, 'recoveryMode:', isRecoveryMode);
       if (event === 'SIGNED_OUT') {
         currentUser = null;
         currentMember = null;
+        isRecoveryMode = false;
         if (onAuthChangeCallback) onAuthChangeCallback(null, null);
       } else if (event === 'PASSWORD_RECOVERY') {
         // User clicked the password reset link in their email
+        isRecoveryMode = true;
         currentUser = session?.user || null;
         if (onPasswordRecoveryCallback) onPasswordRecoveryCallback();
       } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         currentUser = session?.user || null;
+        // If we're in recovery mode, show the password form instead of navigating
+        if (isRecoveryMode) {
+          console.log('[Auth] SIGNED_IN during recovery → showing password form');
+          if (onPasswordRecoveryCallback) onPasswordRecoveryCallback();
+          return; // Don't proceed with normal sign-in flow
+        }
         // Defer the DB lookup to avoid AbortError during auth transitions
         setTimeout(() => resolveAndNotify(), 500);
       }
@@ -40,9 +64,15 @@ const Auth = (() => {
   async function checkSession() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      console.log('[Auth] getSession:', session?.user?.id || 'no session');
+      console.log('[Auth] getSession:', session?.user?.id || 'no session', 'recoveryMode:', isRecoveryMode);
       if (session?.user) {
         currentUser = session.user;
+        // If in recovery mode, show the password form instead of normal flow
+        if (isRecoveryMode) {
+          console.log('[Auth] checkSession: recovery mode → showing password form');
+          if (onPasswordRecoveryCallback) onPasswordRecoveryCallback();
+          return;
+        }
         await resolveAndNotify();
       } else {
         currentUser = null;
@@ -135,10 +165,20 @@ const Auth = (() => {
     try {
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) return { success: false, error: mapAuthError(error.message) };
+      // Clear recovery mode — user has set a new password
+      isRecoveryMode = false;
+      // Clean up the URL hash so recovery tokens don't linger
+      if (window.history.replaceState) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
       return { success: true };
     } catch (err) {
       return { success: false, error: err.message };
     }
+  }
+
+  function isInRecoveryMode() {
+    return isRecoveryMode;
   }
 
   async function logout() {
@@ -170,6 +210,7 @@ const Auth = (() => {
     resetPassword,
     updatePassword,
     onPasswordRecovery,
+    isInRecoveryMode,
     logout,
   };
 })();
