@@ -5,12 +5,21 @@ Parses user-provided genealogical data and inserts into Supabase.
 """
 
 import json
-import requests
+import os
 import uuid
 import sys
 
-APIKEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4ZGN5b2l2dGFwZ2xsbG13dnV0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTE0NDAzNywiZXhwIjoyMDg2NzIwMDM3fQ.mN6gey2egKU16AXbLoBLyhFCuEczyT5GTxzbTR0Ojvs"
-BASE = "https://ixdcyoivtapglllmwvut.supabase.co/rest/v1"
+try:
+    import requests
+except ImportError:
+    requests = None  # nur für den Import in Tools nötig, nicht für die Daten
+
+# Zugangsdaten NUR aus der Umgebung lesen — Service-Role-Keys gehören
+# niemals ins Repository (dieses Repo ist öffentlich!).
+#   export SUPABASE_URL="https://<projekt-ref>.supabase.co"
+#   export SUPABASE_SERVICE_KEY="<service-role-key>"
+APIKEY = os.environ.get("SUPABASE_SERVICE_KEY", "")
+BASE = os.environ.get("SUPABASE_URL", "").rstrip("/") + "/rest/v1"
 HEADERS = {
     "apikey": APIKEY,
     "Authorization": f"Bearer {APIKEY}",
@@ -384,6 +393,11 @@ parent_child = [
 
 
 def main():
+    if not APIKEY or not os.environ.get("SUPABASE_URL"):
+        sys.exit("Fehler: SUPABASE_URL und SUPABASE_SERVICE_KEY als Umgebungsvariablen setzen (siehe RESTORE.md).")
+    if requests is None:
+        sys.exit("Fehler: 'requests' ist nicht installiert (pip3 install requests).")
+
     # Build ID map
     id_map = {}
     for m in members:
